@@ -39,13 +39,12 @@
 
 #include "config.h"
 #include "lcdproc.h"
-#include "webapi.h"
 
 
 /* Uncomment this to enable debug mode */
-//#define DEBUG
+#define DEBUG
 
-#define VERSION "0.7.1"
+#define VERSION "0.7.2"
 
 #define CONFIG_FILE "/etc/emon.conf"
 #define NV_FILENAME "emond.dat"
@@ -71,19 +70,17 @@ typedef struct
     const char* flash_dir;
     /* [lcd] */
     unsigned int lcdproc_port;
-    /* [webapi] */
-    const char* api_base_uri;
-    const char* api_key;
-    unsigned int api_update_rate;
-    unsigned int node_number;
+    /* [mqtt] */
+    const char* mqtt_server;
+    const char* mqtt_base;
 } config_t;
 
 /* Local variables */
 static struct itimerval timer;
 static config_t config;
-static emon_data_t emon_data;
 static unsigned long pulse_count_daily=0;
 static unsigned long pulse_count_monthly=0;
+static unsigned long pulse_count_yearly=0;
 
       
 /**********************************************************
@@ -124,22 +121,14 @@ static int config_cb(void* user, const char* section, const char* name, const ch
    {
       pconfig->lcdproc_port = atoi(value);
    } 
-   else if (MATCH("webapi", "api_base_uri")) 
+   else if (MATCH("mqtt", "mqtt_server"))
    {
-      pconfig->api_base_uri = strdup(value);
-   } 
-   else if (MATCH("webapi", "api_key")) 
+      pconfig->mqtt_server = strdup(value);
+   }
+   else if (MATCH("mqtt", "mqtt_base"))
    {
-      pconfig->api_key = strdup(value);
-   } 
-   else if (MATCH("webapi", "api_update_rate")) 
-   {
-      pconfig->api_update_rate = atoi(value);
-   } 
-   else if (MATCH("webapi", "node_number")) 
-   {
-      pconfig->node_number = atoi(value);
-   } 
+      pconfig->mqtt_base = strdup(value);
+   }
    else 
    {
       syslog(LOG_DAEMON | LOG_WARNING, "unknown config parameter %s/%s\n", section, name);
@@ -183,9 +172,20 @@ int read_flash(const char *path, const char *filename)
          if (fgets(buf, BUFSIZE, f) != NULL)
          {
             pulse_count_monthly=atoi(buf); 
-            syslog(LOG_DAEMON | LOG_INFO, "Load data from file: daily counter %lu, monthly counter %lu\n", 
-                                           pulse_count_daily, pulse_count_monthly);
-         }
+
+        	 /* Read yearly counter */
+         	if (fgets(buf, BUFSIZE, f) != NULL)
+         	{
+            		pulse_count_yearly=atoi(buf);
+            		syslog(LOG_DAEMON | LOG_INFO, "Load data from file: daily counter %lu, monthly counter %lu, yearly counter %lu\n",
+                                           pulse_count_daily, pulse_count_monthly, pulse_count_yearly);
+         	}
+         	else
+         	{
+            		syslog(LOG_DAEMON | LOG_ERR, "Error readingyearly counter from file: %s\n", strerror(errno));
+            rc = -2;
+         	}
+	 }
          else
          {
             syslog(LOG_DAEMON | LOG_ERR, "Error reading monthly counter from file: %s\n", strerror(errno));
@@ -239,11 +239,19 @@ int write_flash(const char *path, const char *filename)
       {
          if (fprintf(f, "%lu\n", pulse_count_monthly) > 0)
          {
+		if (fprintf(f, "%lu\n", pulse_count_yearly) > 0)
+         {
             rc = 0;
 #ifdef DEBUG
-            syslog(LOG_DAEMON | LOG_DEBUG, "Saved data to file: daily counter %lu, monthly counter %lu\n", 
+            syslog(LOG_DAEMON | LOG_DEBUG, "Saved data to file: daily counter %lu, monthly counter %lu\n",
                                             pulse_count_daily, pulse_count_monthly);
 #endif
+         }
+         else
+         {
+            syslog(LOG_DAEMON | LOG_ERR, "Error writing yearly counter to file: %s\n", strerror(errno));
+            rc = -3;
+         }
          }
          else
          {
@@ -262,7 +270,7 @@ int write_flash(const char *path, const char *filename)
    else
    {
       syslog(LOG_DAEMON | LOG_ERR, "Error opening file %s for writing: %s", file, strerror(errno));
-      rc = -3;
+      rc = -4;
    }
    
    return rc;
@@ -357,7 +365,6 @@ static void gpio_handler(void)
    unsigned long pulse_length;
    unsigned long pulse_delta = (config.pulse_length*PULSE_TOLERANCE)/100;
    unsigned int power;
-   
   
    /* read current pin value */
    if (digitalRead(config.pulse_input_pin) == LOW)
@@ -413,6 +420,7 @@ static void gpio_handler(void)
                /* Count pulses */
                pulse_count_daily++;
                pulse_count_monthly++;
+	       pulse_count_yearly++;
                
                /* Display updated measurements on LCD */
                lcd_print(1, 0);
@@ -440,6 +448,7 @@ static void gpio_handler(void)
                      /* Count pulses */
                      pulse_count_daily++;
                      pulse_count_monthly++;
+	             pulse_count_yearly++;
                      
                      /* Display updated measurements on LCD */
                      lcd_print(1, power);
@@ -447,10 +456,20 @@ static void gpio_handler(void)
                      lcd_print(3, pulse_count_monthly*config.wh_per_pulse);
                      
                      /* Send data to EmonCMS via WebAPI */
-                     emon_data.inst_power = power;
-                     emon_data.energy_day = pulse_count_daily*config.wh_per_pulse;
-                     emon_data.energy_month = pulse_count_monthly*config.wh_per_pulse;
-                     emoncms_send(&emon_data);
+#ifdef DEBUG
+                     syslog(LOG_DAEMON | LOG_DEBUG, "Send data: daily counter %lu, monthly counter %lu, yearly counter %lu\n",
+                                            pulse_count_daily, pulse_count_monthly, pulse_count_yearly);
+#endif
+                    // Send Data to MQTT
+                    char command[100];
+                    sprintf(command, "mosquitto_pub -h %s -t %s/power -m %u", config.mqtt_server, config.mqtt_base, power);
+                    system(command);
+                    sprintf(command, "mosquitto_pub -h %s -t %s/day -m %lu", config.mqtt_server, config.mqtt_base, pulse_count_daily);
+                    system(command);
+                    sprintf(command, "mosquitto_pub -h %s -t %s/month -m %lu", config.mqtt_server, config.mqtt_base, pulse_count_monthly);
+                    system(command);
+                    sprintf(command, "mosquitto_pub -h %s -t %s/year -m %lu", config.mqtt_server, config.mqtt_base, pulse_count_yearly);
+                    system(command);
                   }
                   else
                   {
@@ -531,6 +550,27 @@ static int is_first_dom(void)
 }
 
 /**********************************************************
+ * Function: is_first_doy()
+ *
+ * Description:
+ *           Checks if the current day is the first day
+ *           of the year
+ *
+ * Returns:  1 if the current day is 1
+ *           0 otherwise
+ *********************************************************/
+static int is_first_doy(void)
+{
+   struct tm *now_tm;
+   time_t now = time(NULL);
+
+   now_tm = localtime(&now);
+
+   return ((now_tm->tm_mday == 1) && (now_tm->tm_mon==0));
+}
+
+
+/**********************************************************
  * Function: timer_handler()
  * 
  * Description:
@@ -570,6 +610,13 @@ static void timer_handler(int signum)
             syslog(LOG_DAEMON | LOG_NOTICE, "Resetting monthly energy counter (current value %lu)\n", 
                    pulse_count_monthly);
             pulse_count_monthly=0;
+         }
+	 if(is_first_doy())
+         {
+            /* Reset yearly pulse counter */
+            syslog(LOG_DAEMON | LOG_NOTICE, "Resetting yearly energy counter (current value %lu)\n",
+                   pulse_count_yearly);
+            pulse_count_yearly=0;
          }
       }
    }
@@ -634,19 +681,9 @@ int main(int argc, char **argv)
    if (config.flash_dir != NULL)
       syslog(LOG_DAEMON | LOG_NOTICE, "flash_dir: %s\n", config.flash_dir);
    syslog(LOG_DAEMON | LOG_NOTICE, "lcdproc_port: %u\n", config.lcdproc_port);
-   if (config.api_base_uri != NULL)
-      syslog(LOG_DAEMON | LOG_NOTICE, "api_base_uri: %s\n", config.api_base_uri);
-   if (config.api_key != NULL)
-      syslog(LOG_DAEMON | LOG_NOTICE, "api_key: %s\n", config.api_key);   
-   syslog(LOG_DAEMON | LOG_NOTICE, "api_update_rate: %u\n", config.api_update_rate);
-   syslog(LOG_DAEMON | LOG_NOTICE, "node_number: %u\n", config.node_number);
+   syslog(LOG_DAEMON | LOG_NOTICE, "mqtt_server: %s\n", config.mqtt_server);
+   syslog(LOG_DAEMON | LOG_NOTICE, "mqtt_base: %s\n", config.mqtt_base);
    syslog(LOG_DAEMON | LOG_NOTICE, "***************************\n");
-   
-   /* Fill in common data for WebAPI */
-   emon_data.api_base_uri = config.api_base_uri;
-   emon_data.api_key = config.api_key;
-   emon_data.api_update_rate = config.api_update_rate;
-   emon_data.node_number = config.node_number;
    
    /* Load monthly and daily pulse counters from flash */
    if (config.flash_dir != NULL)
@@ -663,7 +700,6 @@ int main(int argc, char **argv)
    {
       syslog(LOG_DAEMON | LOG_WARNING, "Unable to setup LCD screen, display is disabled\n");
    }
-   
    if (config.pulse_input_pin > 0)
    {
       /* Initialise the GPIO lines */ 
