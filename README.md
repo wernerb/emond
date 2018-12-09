@@ -1,41 +1,19 @@
 # emond
 #### Smart Energy Monitor
 
-### About
-This software implements a Smart Energy Monitor to be run on the RaspberryPi. In short, it is a simplified version of a combination of the *emonTX*, *emonGLCD* and *emonBase* modules, developed by the OpenEnergyMonitor project (http://openenergymonitor.org). It is a pure software solution and doesn't require any additional hardware modules to be added.  
-
-It connects to an energy meter via the S0 (pulse) interface and measures/calculates the instant power consumption as well as the electrical energy on daily and monthly basis. The data is sent to EmonCMS (http://emoncms.org) which is the Web server used by the OpenEnergyMonitor project. EmonCMS can then be deployed to further process your data (store, manipulate, chart, ...).  
-
-The easiest way to display the energy data is to use the "My Electrics" appliance in EmonCMS.  
-
-A local LCD display is supported to have instant access to the latest measurements.  
-
-Here is a sample project which was realised with the **emond** software.  It is installed in the main electrical switchboard.
-<br>
-<br>
-
-![Smart Energy Monitor sample project](image/sample-project.png)
-
-<br>
+### Fork
+This is a fork of Ondrej's great work. Instead of Emoncms it publishes the values to a mqtt server. So its realy easy to integrate with openHAB or any other automatation Framework
+Its a really quick & dirty solution. It uses the mosquitto_pub command instead of integrated mqtt librarys.
 
 ### Features
 - Instant power measurement using energy meter pulses
-- Daily and monthly energy calculation
+- Daily, monthly and yearly energy calculation
 - Periodic saving of energy counters to persistant storage and restoring at restart
 - Filtering of short glitches and false pulses on the pulse counting GPIO line
 - Display of measurements on local LCD display (via integrated lcdproc client)
-- Transmission of measurements to EmonCMS (via WebAPI)
-- Full compatibility with "My Electric" appliance in EmonCMS
+- Transmission of measurements to MQTT
 - Easy customization of parameters via configuration file  
-- Configurable WebAPI update rate limit
-<br>
-
-### Nice to have (wishlist)
-- Alarm generation when approaching maximum power consumption
-- Display daily/monthly energy cost
-- Command line tool for reading current power values and energy counters
-- Support for Energy meters with Modbus interface
-- Support for 1-wire temperatue sensor  
+- Works also if mqtt or openHAB is offline
 <br>
 
 ### Hardware modules
@@ -68,48 +46,20 @@ The LCD display is optional. It is controlled via the *lcdproc* software. **emon
 On the RaspberryPi, [lcdproc](http://www.lcdproc.org) supports this kind of display connected via the GPIO lines. For the wiring of the display to the GPIO pins see the lcdproc documentation.  
 <br>
 
-### Screenshot
-
-This is a screenshot of the EmonCMS dashboard, showing a daily power consumption chart and the current power in a gauge.  
-
-![Screenshot](image/dashboard.png)
-
-
-And this is the EmonCMS MyElectric Web application (which looks really good on a Smartphone).  
-
-![MyElectric](image/myelectric.png)
-
-<br>
-
-The electrical switchboard with the Smarphone running the EmonCMS MyElectric Web application.
-
-![Sample project with smartphone](image/sample-project-with-smartphone.jpg)
-
-<br>
-
 ### Installation
-
-If you don't have a cross compile environment for the RaspberryPi installed on your PC, it is easiest to build the software directly on the RaspberryPi. Follow theses simple steps from the RPi console. Make sure you have the necessary packages installed (e.g. git).  
 
 * Install the wiringPi library :  
 Follow the instructions on the projects home page: http://wiringpi.com/download-and-install  
 
-* Install CURL library :  
+* Install Mosquitto client : 
 <pre>
-    sudo apt-get install libcurl4-gnutls-dev
+    apt install mosquitto-clients
 </pre>
 
 * Clone git repository :  
 <pre>
-    git clone https://github.com/ondrej1024/emond
+    git clone https://github.com/kruemelro/emond
     cd emond
-</pre>
-
-* Alternatively get latest source code version :  
-<pre>
-    wget https://github.com/ondrej1024/emond/archive/master.zip
-    unzip master.zip
-    cd emond-master
 </pre>
 
 * Build and install :  
@@ -150,13 +100,11 @@ flash_dir = /media/data # Folder for permanent (writable) storage
 [lcd]
 lcdproc_port =  # Specify this if not using default lcdproc port
  
-# WebAPI specific parameters
+# MQTT
 ################################################
-[webapi]
-api_base_uri = http://emoncms.org # Public EmonCMS server
-api_key      = 1234567890  # Personal EmonCMS API key 
-api_update_rate = 20       # min delay (in s) between 2 API requests
-node_number  = 1           # Identifier of your node in EmonCMS
+[mqtt]
+mqtt_server    = 192.168.1.xxx
+mqtt_base      = energy
 </pre>
 
 <br>
@@ -173,9 +121,3 @@ If you want to autostart the program at every system reboot (recommended), issue
 <pre>
     sudo update-rc.d emon defaults
 </pre>
-
-
-### Contributing
-
-Any contribution like feedback, bug reports or code proposals are welcome and highly encouraged.  
-Get in touch by e-mail to ondrej.wisniewski (at) gmail.com  
