@@ -9,17 +9,17 @@ BINPATH	=/usr/local/bin
 CNFPATH	=/etc
 SRCPATH	=./src
 
-SRC	= emond.c sockets.c lcdproc.c config.c webapi.c
+SRC	= emond.c lcdproc.c config.c sockets.c
 OBJ	= $(SRC:.c=.o)
 
 # DEBUG	= -O2
 CC	= gcc
 INCLUDE	= -I/usr/local/include
 LIBS	= -L/usr/local/lib
-CFLAGS	= $(DEBUG) $(INCLUDE) $(LIBS) -Wformat=2 -Wall -Winline  -pipe -fPIC 
+CFLAGS	= $(DEBUG) $(INCLUDE) $(LIBS) -Wformat=2 -Wall -Winline  -pipe -fPIC
 
 # List of objects files for the dependency
-OBJS_DEPEND= -lwiringPi -lrt -lcurl -lpthread
+OBJS_DEPEND= -lwiringPi -lrt -lpthread
 
 # OPTIONS = --verbose
 
