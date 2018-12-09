@@ -44,7 +44,7 @@
 /* Uncomment this to enable debug mode */
 #define DEBUG
 
-#define VERSION "0.7.2"
+#define VERSION "0.8"
 
 #define CONFIG_FILE "/etc/emon.conf"
 #define NV_FILENAME "emond.dat"
