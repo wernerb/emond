@@ -1,6 +1,6 @@
 #
 # Makefile
-# gcc -o emond emond.c sockets.c lcdproc.c config.c webapi.c -I/usr/local/include -L/usr/local/lib -lwiringPi -lrt -lcurl
+# gcc -o emond emond.c config.c -I/usr/local/include -L/usr/local/lib -lwiringPi -lrt
 #
 
 RM	= \rm -f
@@ -9,7 +9,7 @@ BINPATH	=/usr/local/bin
 CNFPATH	=/etc
 SRCPATH	=./src
 
-SRC	= emond.c lcdproc.c config.c sockets.c
+SRC	= emond.c config.c
 OBJ	= $(SRC:.c=.o)
 
 # DEBUG	= -O2
@@ -33,11 +33,11 @@ target: Makefile
 clean:
 	@echo "---- Cleaning all object and executable files ----"
 	$(RM) $(PROG) $(OBJ)
-	@echo "" 
+	@echo ""
 
 install: target
 	@echo "---- Install binaries and scripts ----"
 	cp $(SRCPATH)/$(PROG) $(BINPATH)
 	cp conf/emon.conf $(CNFPATH)/
 	cp init.d/emon $(CNFPATH)/init.d/
- 
+
