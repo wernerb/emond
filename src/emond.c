@@ -622,7 +622,7 @@ static void timer_handler(int signum)
  *********************************************************/
 int main(int argc, char **argv)
 {
-   openlog("emond", LOG_PID|LOG_CONS, LOG_USER);
+   openlog("emond", LOG_PID|LOG_PERROR, LOG_USER);
    syslog(LOG_DAEMON | LOG_NOTICE, "Starting Energy Monitor (version %s)\n", VERSION);
 
    /* Setup error handlers */
