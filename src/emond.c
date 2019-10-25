@@ -66,6 +66,7 @@ typedef struct
     /* [mqtt] */
     const char* mqtt_server;
     const char* mqtt_base;
+    const char* mqtt_port;
 } config_t;
 
 /* Local variables */
@@ -117,6 +118,10 @@ static int config_cb(void* user, const char* section, const char* name, const ch
    else if (MATCH("mqtt", "mqtt_base"))
    {
       pconfig->mqtt_base = strdup(value);
+   }
+   else if (MATCH("mqtt", "mqtt_port"))
+   {
+      pconfig->mqtt_port = strdup(value);
    }
    else
    {
@@ -426,13 +431,13 @@ static void gpio_handler(void)
 #endif
                     // Send Data to MQTT
                     char command[100];
-                    sprintf(command, "mosquitto_pub -h %s -t %s/power -m %u", config.mqtt_server, config.mqtt_base, power);
+                    sprintf(command, "mosquitto_pub -h %s -p %s -t %s/power -m %u", config.mqtt_server, config.mqtt_port, config.mqtt_base, power);
                     system(command);
-                    sprintf(command, "mosquitto_pub -h %s -t %s/day -m %lu", config.mqtt_server, config.mqtt_base, pulse_count_daily);
+                    sprintf(command, "mosquitto_pub -h %s -p %s -t %s/day -m %lu", config.mqtt_server, config.mqtt_port, config.mqtt_base, pulse_count_daily);
                     system(command);
-                    sprintf(command, "mosquitto_pub -h %s -t %s/month -m %lu", config.mqtt_server, config.mqtt_base, pulse_count_monthly);
+                    sprintf(command, "mosquitto_pub -h %s -p %s -t %s/month -m %lu", config.mqtt_server, config.mqtt_port, config.mqtt_base, pulse_count_monthly);
                     system(command);
-                    sprintf(command, "mosquitto_pub -h %s -t %s/year -m %lu", config.mqtt_server, config.mqtt_base, pulse_count_yearly);
+                    sprintf(command, "mosquitto_pub -h %s -p %s -t %s/year -m %lu", config.mqtt_server, config.mqtt_port, config.mqtt_base, pulse_count_yearly);
                     system(command);
                   }
                   else
@@ -645,6 +650,7 @@ int main(int argc, char **argv)
       syslog(LOG_DAEMON | LOG_NOTICE, "flash_dir: %s\n", config.flash_dir);
    syslog(LOG_DAEMON | LOG_NOTICE, "mqtt_server: %s\n", config.mqtt_server);
    syslog(LOG_DAEMON | LOG_NOTICE, "mqtt_base: %s\n", config.mqtt_base);
+   syslog(LOG_DAEMON | LOG_NOTICE, "mqtt_port: %s\n", config.mqtt_port);
    syslog(LOG_DAEMON | LOG_NOTICE, "***************************\n");
 
    /* Load monthly and daily pulse counters from flash */
